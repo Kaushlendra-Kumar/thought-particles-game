@@ -2,7 +2,7 @@
 
 An interactive physics-based thought visualization tool where your ideas become living particles that interact, attract, and evolve in a cosmic environment.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Krypt0nite/thought-particles-game)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Kaushlendra-Kumar/thought-particles-game)
 
 ## ✨ Features
 
@@ -19,17 +19,25 @@ Opposite thoughts attract each other! Watch "sad" and "happy" particles pull tog
 
 ### 🎮 Physics Engine
 
-- **Drag & Drop** - Move thoughts with realistic momentum
-- **Collision Detection** - Particles bounce off each other
-- **Zone Return** - Delayed return to home zones (5-10 seconds)
-- **Energy Waves** - Beautiful particle effects
-- **Motion Blur** - Smooth visual feedback
+- **Drag & Throw** - Move thoughts with mouse or touch and throw them with momentum
+- **Drop into a Zone** - Release a thought inside a zone to move it there
+- **Zone Return** - Thoughts pulled out of their zone wander for 5-10 seconds, then drift home
+- **Collisions** - Particles bounce off each other
+- **Pan & Zoom** - Drag empty space to pan, scroll or use the buttons to zoom
+- **Frame-rate independent** - Same speed on 60Hz and 120Hz screens
 
-### 💾 Persistence
+### 💾 Save & Share
 
-- **Save/Load** - Store your thought layouts
-- **Export** - Download as PNG image
-- **Real-time Stats** - Track thoughts, particles, and zoom
+- **Autosave** - Your layout is saved when you leave and restored when you return
+- **Share link** - Copy a link that opens your exact layout on any device
+- **Export** - Download the canvas as a PNG
+- **Undo** - Deleting or clearing thoughts can be undone
+
+### 📱 Works Everywhere
+
+- Touch support and a mobile layout
+- Keyboard controls and a screen-reader list of thoughts
+- Respects "reduce motion" settings
 
 ## 🚀 Live Demo
 
@@ -37,74 +45,66 @@ Opposite thoughts attract each other! Watch "sad" and "happy" particles pull tog
 
 ## 🛠️ Tech Stack
 
-- **React 18** - UI framework
+- **React 19** + **Vite** - UI framework and build tool
 - **Tailwind CSS** - Styling
 - **HTML5 Canvas** - Rendering engine
 - **Custom Physics Engine** - Particle interactions
-- **Lucide React** - Beautiful icons
+- **Vitest** - Unit tests
+- **Lucide React** - Icons
 
 ## 📦 Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/Krypt0nite/thought-particles-game.git
-
-# Navigate to project
+git clone https://github.com/Kaushlendra-Kumar/thought-particles-game.git
 cd thought-particles-game
-
-# Install dependencies
 npm install
-
-# Start development server
-npm start
+npm run dev     # start the dev server
+npm test        # run the tests
+npm run build   # production build in ./build
 ```
-
-Visit `http://localhost:3000` to see the app running locally.
 
 ## 🎯 How to Use
 
 1. **Add Thoughts** - Type in the input field and press Enter
-2. **Choose a Zone** - Select a zone or leave as "Free floating"
-3. **Drag Thoughts** - Click and drag particles around
-4. **Watch Interactions** - Opposite thoughts attract each other!
-5. **Experiment** - Try different physics by moving between zones
-6. **Save Your Work** - Use the Save button to persist your layout
+2. **Choose a Zone** - Select a zone or leave it as "Free floating"
+3. **Drag Thoughts** - Drag bubbles around, or drop them into another zone
+4. **Watch Interactions** - Opposite thoughts attract each other (turn on **Links** to see the pairs)
+5. **Edit** - Double-click or double-tap a thought to rename it
+6. **Share** - Press Share to copy a link to your layout
 
-## ⌨️ Keyboard Shortcuts
+## ⌨️ Controls
 
-- `Enter` - Add thought
-- `Space` - Pause/Play
-- `Ctrl+S` - Save state
-- `Ctrl+Scroll` - Zoom in/out
-- `Click & Drag` - Move thoughts
+| Action | Control |
+| --- | --- |
+| Add thought | `Enter` in the input |
+| Edit thought | Double-click / double-tap, or `Enter` on the selected thought |
+| Pause / Play | `Space` |
+| Delete selected | `Delete` / `Backspace` |
+| Save | `Ctrl+S` / `⌘+S` |
+| Zoom | Mouse wheel or the zoom buttons |
+| Pan | Drag empty space |
+| Select / nudge | `Tab` / arrow keys (when the canvas is focused) |
 
 ## 🎨 Antonym Pairs
 
-The following thought pairs attract each other:
-
-- sad ↔ happy
-- chaos ↔ calm
-- chaos ↔ peace
-- angry ↔ peaceful
-- dark ↔ light
-- stress ↔ relax
-- fear ↔ brave
-- hate ↔ love
+Whole words in these pairs attract each other: sad ↔ happy, chaos ↔ calm, chaos ↔ peace, angry ↔ peaceful,
+dark ↔ light, stress ↔ relax, fear ↔ brave, hate ↔ love, good ↔ bad, hope ↔ despair, start ↔ end,
+past ↔ future, दुख ↔ सुख, डर ↔ हिम्मत, नफरत ↔ प्यार.
 
 ## 🏗️ Project Structure
 
 ```
 thought-particles-game/
+├── index.html
 ├── src/
-│   ├── config/         # Physics defaults & zone configs
-│   ├── engine/         # Physics, rendering, input handling
-│   ├── models/         # Thought, particle, zone models
-│   ├── ui/             # React components
-│   ├── hooks/          # Custom React hooks
-│   ├── App.js          # Main application
-│   └── index.js        # Entry point
-├── public/
-└── package.json
+│   ├── config/zones.js     # Zone definitions and responsive layout
+│   ├── engine/             # Game loop, physics, rendering, input, camera
+│   ├── models/             # Thought, particle and vector helpers
+│   ├── ui/                 # React components (panel, stats, toast)
+│   ├── storage.js          # Autosave and share links
+│   ├── App.jsx             # Wires the engine to the UI
+│   └── main.jsx            # Entry point
+└── public/
 ```
 
 ## 🤝 Contributing
@@ -127,7 +127,7 @@ MIT License - feel free to use this project for learning or inspiration!
 
 ## 🙏 Acknowledgments
 
-- Built with Create React App
+- Built with Vite
 - Physics inspired by particle simulation systems
 - UI design inspired by cosmic themes
 

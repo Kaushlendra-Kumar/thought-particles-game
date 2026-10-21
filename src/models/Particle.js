@@ -1,131 +1,86 @@
-// src/models/Particle.js - UPDATED
-export function createParticle(x, y, color = null) {
+export const MAX_PARTICLES = 300
+
+const rand = (min, max) => min + Math.random() * (max - min)
+
+export function createParticle(x, y, color, speed = 2) {
   return {
     x,
     y,
-    vx: (Math.random() - 0.5) * 4,
-    vy: (Math.random() - 0.5) * 4,
+    vx: rand(-speed, speed),
+    vy: rand(-speed, speed),
     life: 1,
-    maxLife: 1,
-    size: Math.random() * 6 + 3, // Bigger particles (was 3+1, now 6+3)
-    color: color || `hsl(${Math.random() * 60 + 200}, 80%, 65%)`,
-    glow: Math.random() * 0.8 + 0.5,
+    size: rand(2, 6),
+    color: color || `hsl(${rand(200, 260)}, 80%, 65%)`,
   }
 }
 
-export function updateParticles(particles) {
-  return particles.filter((p) => {
-    p.x += p.vx
-    p.y += p.vy
+export function burst(state, x, y, color, count, speed) {
+  for (let i = 0; i < count; i++) state.particles.push(createParticle(x, y, color, speed))
+}
 
-    p.vy += 0.03 // Less gravity
-    p.vx *= 0.99
-    p.vy *= 0.99
+export function createAmbientParticle({ width, height }) {
+  return {
+    x: Math.random() * width,
+    y: Math.random() * height,
+    vx: rand(-0.25, 0.25),
+    vy: rand(-0.25, 0.25),
+    life: rand(0.4, 1.2),
+    size: rand(1, 3),
+    color: '#ffffff',
+    ambient: true,
+  }
+}
 
-    p.life -= 0.015 // Slower fade
-    p.glow = p.life
+export function createWave(x, y, color, maxRadius = rand(150, 350)) {
+  return { x, y, radius: 10, maxRadius, speed: rand(1, 3), alpha: 1, color }
+}
 
+// `f` is elapsed time in 60fps frames, so motion is frame-rate independent.
+export function updateParticles(particles, f) {
+  const drag = Math.pow(0.99, f)
+  const alive = particles.filter((p) => {
+    p.x += p.vx * f
+    p.y += p.vy * f
+    if (!p.ambient) p.vy += 0.03 * f
+    p.vx *= drag
+    p.vy *= drag
+    p.life -= (p.ambient ? 0.006 : 0.02) * f
     return p.life > 0
   })
+  return alive.length > MAX_PARTICLES ? alive.slice(-MAX_PARTICLES) : alive
 }
 
-export function renderParticles(ctx, particles) {
-  particles.forEach((p) => {
-    ctx.save()
-
-    // Stronger glow
-    if (p.glow > 0.3) {
-      ctx.shadowBlur = 15
-      ctx.shadowColor = p.color
-    }
-
-    ctx.globalAlpha = p.life * 0.9
-    ctx.fillStyle = p.color
-    ctx.beginPath()
-    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
-    ctx.fill()
-
-    // Add bright center
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)'
-    ctx.beginPath()
-    ctx.arc(p.x, p.y, p.size * 0.4, 0, Math.PI * 2)
-    ctx.fill()
-
-    ctx.restore()
-  })
-}
-
-export function createExplosion(x, y, count = 20, color = null) {
-  const particles = []
-  for (let i = 0; i < count; i++) {
-    const angle = (Math.PI * 2 * i) / count
-    const speed = Math.random() * 5 + 3
-    particles.push({
-      x,
-      y,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      life: 1,
-      maxLife: 1,
-      size: Math.random() * 6 + 3,
-      color: color || `hsl(${Math.random() * 360}, 80%, 65%)`,
-      glow: 1,
-    })
-  }
-  return particles
-}
-
-export function createAmbientParticle(canvas) {
-  return {
-    x: Math.random() * canvas.width,
-    y: Math.random() * canvas.height,
-    vx: (Math.random() - 0.5) * 0.5,
-    vy: (Math.random() - 0.5) * 0.5,
-    life: Math.random() * 0.8 + 0.4,
-    maxLife: 1,
-    size: Math.random() * 4 + 2, // Bigger ambient particles
-    color: `rgba(255, 255, 255, ${Math.random() * 0.7 + 0.3})`,
-    glow: 0.5,
-  }
-}
-
-// NEW: Energy wave system
-export function createEnergyWave(canvas) {
-  return {
-    x: Math.random() * canvas.width,
-    y: Math.random() * canvas.height,
-    radius: 10,
-    maxRadius: Math.random() * 200 + 150,
-    speed: Math.random() * 2 + 1,
-    alpha: 0.6,
-    color: `hsl(${Math.random() * 360}, 70%, 60%)`,
-  }
-}
-
-export function updateEnergyWaves(waves) {
+export function updateWaves(waves, f) {
   return waves.filter((w) => {
-    w.radius += w.speed
+    w.radius += w.speed * f
     w.alpha = 1 - w.radius / w.maxRadius
     return w.radius < w.maxRadius
   })
 }
 
-export function renderEnergyWaves(ctx, waves) {
-  waves.forEach((w) => {
-    ctx.save()
+// Additive blending gives the glow look without the cost of shadowBlur per particle.
+export function renderParticles(ctx, particles) {
+  ctx.save()
+  ctx.globalCompositeOperation = 'lighter'
+  for (const p of particles) {
+    ctx.globalAlpha = Math.min(1, p.life) * 0.8
+    ctx.fillStyle = p.color
+    ctx.beginPath()
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.restore()
+}
 
-    // Multiple rings for visibility
-    for (let i = 0; i < 3; i++) {
-      ctx.strokeStyle = w.color
-      ctx.lineWidth = 4 - i
-      ctx.globalAlpha = w.alpha * (0.6 - i * 0.15)
-      ctx.shadowBlur = 20
-      ctx.shadowColor = w.color
-      ctx.beginPath()
-      ctx.arc(w.x, w.y, w.radius + i * 5, 0, Math.PI * 2)
-      ctx.stroke()
-    }
-
-    ctx.restore()
-  })
+export function renderWaves(ctx, waves) {
+  ctx.save()
+  ctx.lineWidth = 3
+  for (const w of waves) {
+    ctx.strokeStyle = w.color
+    ctx.globalAlpha = w.alpha * 0.5
+    ctx.beginPath()
+    ctx.arc(w.x, w.y, w.radius, 0, Math.PI * 2)
+    ctx.stroke()
+  }
+  ctx.restore()
 }

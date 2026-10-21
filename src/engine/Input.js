@@ -1,192 +1,160 @@
-// src/engine/Input.js - FIXED CURSOR DETECTION
 import { Vector } from '../models/Vector'
-import { createParticle } from '../models/Particle'
+import { burst } from '../models/Particle'
+import { screenToWorld } from './camera'
 
-export function setupInput(canvas, state, callbacks) {
-  let lastMousePos = { x: 0, y: 0 }
-  // let dragStartPos = { x: 0, y: 0 }
+const DOUBLE_TAP_MS = 350
 
-  const getMousePos = (e) => {
-    const rect = canvas.getBoundingClientRect()
-    // More accurate position calculation
-    const scaleX = canvas.width / rect.width
-    const scaleY = canvas.height / rect.height
+// Pointer events cover mouse, touch and pen with one code path.
+export function setupInput(canvas, state, cb) {
+  let drag = null // { thought } or { panFrom: {x, y} }
+  let last = null
+  let lastMoveAt = 0
+  let lastTap = { thought: null, at: 0 }
 
-    return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY,
+  const toWorld = (e) => {
+    const r = canvas.getBoundingClientRect()
+    return screenToWorld({ x: e.clientX - r.left, y: e.clientY - r.top }, state)
+  }
+  // Topmost (last drawn) thought under the point
+  const hit = (p) => state.thoughts.findLast((t) => Vector.dist(p, t) <= t.size) || null
+
+  const onDown = (e) => {
+    canvas.setPointerCapture(e.pointerId)
+    const p = toWorld(e)
+    const t = hit(p)
+    last = p
+    lastMoveAt = performance.now()
+    state.selected = t
+
+    if (!t) {
+      drag = { panFrom: { x: e.clientX, y: e.clientY } }
+      canvas.style.cursor = 'move'
+      return
     }
+    if (lastTap.thought === t && performance.now() - lastTap.at < DOUBLE_TAP_MS) {
+      lastTap = { thought: null, at: 0 }
+      drag = null
+      cb.onEdit(t)
+      return
+    }
+    lastTap = { thought: t, at: performance.now() }
+    drag = { thought: t }
+    state.dragged = t
+    t.glow = 1
+    t.returnAt = 0
+    t.vx = t.vy = 0
+    canvas.style.cursor = 'grabbing'
+    burst(state, t.x, t.y, t.color, 8, 3)
   }
 
-  const handleMouseMove = (e) => {
-    const pos = getMousePos(e)
-    // const prevMouse = state.mouse
-    state.mouse = pos
+  const onMove = (e) => {
+    const p = toWorld(e)
+    state.pointer = e.pointerType === 'mouse' ? p : null
 
-    // Check if hovering over any thought - MORE ACCURATE
-    let hovering = false
-    state.thoughts.forEach((t) => {
-      const d = Vector.dist(pos, t)
-      // Check if mouse is INSIDE the thought bubble (not just near it)
-      if (d <= t.size) {
-        hovering = true
-        t.glow = 0.5
-        canvas.style.cursor = 'grab' // Show grab cursor
-      }
-    })
-
-    if (!hovering && !state.draggedThought) {
-      canvas.style.cursor = 'default'
+    if (drag?.thought) {
+      const t = drag.thought
+      t.vx = p.x - last.x
+      t.vy = p.y - last.y
+      t.x = p.x
+      t.y = p.y
+      if (Math.hypot(t.vx, t.vy) > 5) t.breakBond = 10 // a fast drag tears it from its opposite
+      if (Math.random() < 0.3) burst(state, p.x, p.y, t.color, 1, 2)
+      lastMoveAt = performance.now()
+    } else if (drag?.panFrom) {
+      state.camera.x += (e.clientX - drag.panFrom.x) / state.camera.zoom
+      state.camera.y += (e.clientY - drag.panFrom.y) / state.camera.zoom
+      drag.panFrom = { x: e.clientX, y: e.clientY }
+    } else {
+      state.hovered = e.pointerType === 'mouse' ? hit(p) : null
+      canvas.style.cursor = state.hovered ? 'grab' : 'default'
     }
-
-    if (state.draggedThought) {
-      // Calculate drag velocity
-      const dragVelocity = {
-        x: pos.x - lastMousePos.x,
-        y: pos.y - lastMousePos.y,
-      }
-      const dragSpeed = Math.sqrt(
-        dragVelocity.x * dragVelocity.x + dragVelocity.y * dragVelocity.y,
-      )
-
-      // Update position directly to cursor
-      state.draggedThought.x = pos.x
-      state.draggedThought.y = pos.y
-
-      // Store drag velocity
-      state.draggedThought.vx = dragVelocity.x
-      state.draggedThought.vy = dragVelocity.y
-
-      canvas.style.cursor = 'grabbing'
-
-      // Break attraction with speed
-      if (dragSpeed > 5) {
-        state.draggedThought.breakBond = 10
-      }
-
-      // Trail particles
-      if (Math.random() < 0.3) {
-        state.particles.push(
-          createParticle(pos.x, pos.y, state.draggedThought.color),
-        )
-      }
-    }
-
-    lastMousePos = { ...pos }
+    last = toWorld(e)
   }
 
-  const handleMouseDown = (e) => {
-    const pos = getMousePos(e)
-    // dragStartPos = { ...pos }
-
-    // Find clicked thought - check if click is INSIDE bubble
-    const clicked = state.thoughts.find((t) => {
-      const distance = Vector.dist(pos, t)
-      return distance <= t.size
-    })
-
-    if (clicked) {
-      state.draggedThought = clicked
-      clicked.glow = 1
-      clicked.returning = false // Stop returning to zone
-      clicked.returnDelay = 0 // Reset return delay
-      canvas.style.cursor = 'grabbing'
-
-      // Grab particles
-      for (let i = 0; i < 8; i++) {
-        state.particles.push(
-          createParticle(clicked.x, clicked.y, clicked.color),
-        )
-      }
-    }
-  }
-
-  const handleMouseUp = () => {
-    if (state.draggedThought) {
-      const thought = state.draggedThought
-      thought.glow = 0.3
-
-      // Calculate release velocity for momentum
-      const releaseVelocity = {
-        x: state.mouse.x - lastMousePos.x,
-        y: state.mouse.y - lastMousePos.y,
-      }
-
-      // Apply momentum
-      thought.vx = releaseVelocity.x * 2
-      thought.vy = releaseVelocity.y * 2
-
-      // If thought has a zone, calculate return delay based on distance
-      if (thought.zone) {
-        const homeZone = state.zones.find((z) => z.id === thought.zone)
-        if (homeZone) {
-          const distanceFromZone = Vector.dist(thought, homeZone)
-          // Return delay: 5-10 seconds based on distance
-          // Closer = shorter delay, farther = longer delay
-          const maxDistance = Math.max(window.innerWidth, window.innerHeight)
-          const normalizedDistance = Math.min(distanceFromZone / maxDistance, 1)
-          thought.returnDelay = 5 + normalizedDistance * 5 // 5 to 10 seconds
-          thought.returnStartTime = Date.now()
-          thought.returning = false // Will start returning after delay
-        }
-      }
-    }
-    state.draggedThought = null
+  const onUp = () => {
+    const t = drag?.thought
+    drag = null
+    state.dragged = null
     canvas.style.cursor = 'default'
+    if (!t) return
+
+    // Throw with momentum, unless the pointer was resting before release
+    const resting = performance.now() - lastMoveAt > 80
+    t.vx = resting ? 0 : t.vx * 2
+    t.vy = resting ? 0 : t.vy * 2
+
+    const dropZone = state.zones.find((z) => Vector.dist(t, z) < z.radius)
+    if (dropZone) {
+      if (t.zone !== dropZone.id) cb.onZoneChange(t, dropZone)
+    } else if (t.zone) {
+      // Wander for 5-10s (longer when thrown further) before drifting home
+      const home = state.zones.find((z) => z.id === t.zone)
+      const far = Math.min(Vector.dist(t, home) / Math.max(state.view.width, state.view.height), 1)
+      t.returnAt = performance.now() + (5 + far * 5) * 1000
+    }
   }
 
-  const handleWheel = (e) => {
+  const onLeave = () => {
+    state.pointer = null
+    state.hovered = null
+  }
+
+  const onWheel = (e) => {
     e.preventDefault()
-    const delta = e.deltaY > 0 ? 0.9 : 1.1
-    state.camera.zoom = Math.max(0.5, Math.min(1.3, state.camera.zoom * delta))
-
-    if (callbacks.onZoomChange) {
-      callbacks.onZoomChange(state.camera.zoom)
-    }
+    cb.onZoom(state.camera.zoom * (e.deltaY > 0 ? 0.9 : 1.1))
   }
 
-  const handleDoubleClick = (e) => {
-    const pos = getMousePos(e)
-    const clicked = state.thoughts.find((t) => Vector.dist(pos, t) <= t.size)
-
-    if (clicked && callbacks.onThoughtDoubleClick) {
-      callbacks.onThoughtDoubleClick(clicked)
-    }
-  }
-
-  const handleKeyDown = (e) => {
-    if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
+  const onKey = (e) => {
+    const typing = e.target.closest?.('input, textarea, select, button')
+    const s = state.selected
+    if ((e.ctrlKey || e.metaKey) && e.code === 'KeyS') {
       e.preventDefault()
-      if (callbacks.onTogglePause) callbacks.onTogglePause()
-    }
-
-    if (e.code === 'Delete' || e.code === 'Backspace') {
-      if (state.selectedThought && e.target.tagName !== 'INPUT') {
+      cb.onSave()
+    } else if (typing) {
+      return
+    } else if (e.code === 'Space') {
+      e.preventDefault()
+      cb.onTogglePause()
+    } else if ((e.code === 'Delete' || e.code === 'Backspace') && s) {
+      e.preventDefault()
+      cb.onDelete(s)
+    } else if (e.code === 'Enter' && s) {
+      cb.onEdit(s)
+    } else if (e.code === 'Escape') {
+      state.selected = null
+    } else if (e.code === 'Tab' && e.target === canvas && state.thoughts.length) {
+      // While the canvas has focus, Tab walks through thoughts, then moves on as usual
+      const i = state.thoughts.indexOf(s)
+      const next = i + (e.shiftKey ? -1 : 1)
+      if (i === -1 || (next >= 0 && next < state.thoughts.length)) {
         e.preventDefault()
-        if (callbacks.onDeleteThought)
-          callbacks.onDeleteThought(state.selectedThought)
+        state.selected = state.thoughts[i === -1 ? (e.shiftKey ? state.thoughts.length - 1 : 0) : next]
+      } else {
+        state.selected = null
       }
-    }
-
-    if (e.ctrlKey && e.code === 'KeyS') {
+    } else if (s && e.code.startsWith('Arrow')) {
       e.preventDefault()
-      if (callbacks.onSave) callbacks.onSave()
+      const push = { ArrowUp: [0, -3], ArrowDown: [0, 3], ArrowLeft: [-3, 0], ArrowRight: [3, 0] }[e.code]
+      s.vx += push[0]
+      s.vy += push[1]
     }
   }
 
-  canvas.addEventListener('mousemove', handleMouseMove)
-  canvas.addEventListener('mousedown', handleMouseDown)
-  canvas.addEventListener('mouseup', handleMouseUp)
-  canvas.addEventListener('wheel', handleWheel, { passive: false })
-  canvas.addEventListener('dblclick', handleDoubleClick)
-  window.addEventListener('keydown', handleKeyDown)
+  canvas.addEventListener('pointerdown', onDown)
+  canvas.addEventListener('pointermove', onMove)
+  canvas.addEventListener('pointerup', onUp)
+  canvas.addEventListener('pointercancel', onUp)
+  canvas.addEventListener('pointerleave', onLeave)
+  canvas.addEventListener('wheel', onWheel, { passive: false })
+  window.addEventListener('keydown', onKey)
 
   return () => {
-    canvas.removeEventListener('mousemove', handleMouseMove)
-    canvas.removeEventListener('mousedown', handleMouseDown)
-    canvas.removeEventListener('mouseup', handleMouseUp)
-    canvas.removeEventListener('wheel', handleWheel)
-    canvas.removeEventListener('dblclick', handleDoubleClick)
-    window.removeEventListener('keydown', handleKeyDown)
+    canvas.removeEventListener('pointerdown', onDown)
+    canvas.removeEventListener('pointermove', onMove)
+    canvas.removeEventListener('pointerup', onUp)
+    canvas.removeEventListener('pointercancel', onUp)
+    canvas.removeEventListener('pointerleave', onLeave)
+    canvas.removeEventListener('wheel', onWheel)
+    window.removeEventListener('keydown', onKey)
   }
 }
